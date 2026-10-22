@@ -42,6 +42,17 @@ uvicorn main:app --reload --host 127.0.0.1 --port 3001
 
 API docs are available at `http://127.0.0.1:3001/docs`.
 
+## Fixing SVG-to-PNG conversion errors
+
+If you pulled an older version of this project and see `Could not convert the generated SVG to PNG`, stop the backend and update the dependencies/code:
+
+```powershell
+python -m pip install --upgrade -r requirements.txt
+uvicorn main:app --reload --host 127.0.0.1 --port 3001
+```
+
+The current backend uses `resvg-py` instead of CairoSVG to avoid missing Cairo native libraries, and logs renderer details to the backend terminal if the model returns invalid SVG.
+
 ## API examples
 
 ### Health
@@ -79,5 +90,5 @@ If your local frontend is still part of the `Azure-Models` repository, keep the 
 ## Notes
 
 - Image upload limit is 10 MiB; accepted formats are PNG, JPEG, and WebP.
-- Generated art is SVG authored by the text model and rasterized to PNG. It is vector-style illustration, not native photorealistic image generation.
+- Generated art is SVG authored by the text model and rasterized to PNG using `resvg-py`, which includes a prebuilt renderer and does not require native Cairo/GTK libraries on Windows. It is vector-style illustration, not native photorealistic image generation.
 - Azure deployment/API support varies by resource and model. If a request fails, the API returns Azure's error message when available.
