@@ -35,9 +35,17 @@ jobs:
           python -m pip install -r requirements.txt
           python -m compileall -q main.py streamlit_app.py
 
+      - name: Build Python app for Azure App Service (Oryx)
+        uses: azure/appservice-build@v2
+        with:
+          platform: python
+          platform-version: "3.14"
+          source-directory: .
+          output-directory: ./build_output
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: "Chat-Bot-Azure"
           publish-profile: ${{ secrets.CHAT_BOT }}
-          package: .
+          package: ./build_output
