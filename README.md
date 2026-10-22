@@ -98,11 +98,11 @@ If your local frontend is still part of the `Azure-Models` repository, keep the 
 
 This repo includes `startup.sh` to launch FastAPI on the loopback interface and Streamlit as the public web app. In Azure App Service (Linux, Python):
 
-1. In **Settings → Environment variables** (or Configuration), set `SCM_DO_BUILD_DURING_DEPLOYMENT` to `true`. This tells App Service's Oryx build to install the dependencies from the root `requirements.txt` when deploying.
+1. The GitHub Actions workflow runs an Oryx build (`azure/appservice-build`) and deploys its output directory, which includes the Python runtime dependencies. Keep `requirements.txt` in the repository root. If you instead deploy the raw source folder without the Oryx build step, enable `SCM_DO_BUILD_DURING_DEPLOYMENT=true` in App Service settings.
 2. Set the **Startup Command** to the plain text `bash startup.sh`. Do not paste the multi-command `bash -c '...'` expression; nested quotes can break Oryx argument parsing.
 3. Keep `PORT` set to the app's public port (the provided logs showed `PORT=3001`). Streamlit listens on `$PORT`; FastAPI listens internally on `BACKEND_PORT`, defaulting to `3002`.
 4. Add `AZURE_ENDPOINT`, `AZURE_API_KEY`, and `AZURE_MODEL` as App Service environment variables. Do not commit secrets to GitHub.
 
-The GitHub Actions workflow installs dependencies to validate the code on the runner, but no longer creates and deploys a runner-specific `antenv` virtual environment. Azure's Oryx build should create the runtime environment for App Service.
+The GitHub Actions workflow first validates imports and syntax on the runner, then builds the app with Oryx into `build_output` and deploys that output. This avoids depending on the runner's local virtual environment being available in Azure.
 
 The current startup script sets `STREAMLIT_API_BASE=http://127.0.0.1:3002` for Streamlit's server-side calls to FastAPI. If you explicitly define `STREAMLIT_API_BASE` in Azure settings, make sure it points to this internal URL.
