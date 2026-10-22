@@ -1,5 +1,10 @@
 name: Deploy Streamlit App to Azure
 
+# Serialize deployments to avoid overlapping Azure OneDeploy operations.
+concurrency:
+  group: chat-bot-azure-production
+  cancel-in-progress: false
+
 on:
   push:
     branches:
