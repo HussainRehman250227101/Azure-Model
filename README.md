@@ -92,3 +92,17 @@ If your local frontend is still part of the `Azure-Models` repository, keep the 
 - Image upload limit is 10 MiB; accepted formats are PNG, JPEG, and WebP.
 - Generated art is SVG authored by the text model and rasterized to PNG using `resvg-py`, which includes a prebuilt renderer and does not require native Cairo/GTK libraries on Windows. It is vector-style illustration, not native photorealistic image generation.
 - Azure deployment/API support varies by resource and model. If a request fails, the API returns Azure's error message when available.
+
+
+## Deploy Streamlit and FastAPI together to Azure App Service
+
+This repo includes `startup.sh` to launch FastAPI on the loopback interface and Streamlit as the public web app. In Azure App Service (Linux, Python):
+
+1. In **Settings → Environment variables** (or Configuration), set `SCM_DO_BUILD_DURING_DEPLOYMENT` to `true`. This tells App Service's Oryx build to install the dependencies from the root `requirements.txt` when deploying.
+2. Set the **Startup Command** to the plain text `bash startup.sh`. Do not paste the multi-command `bash -c '...'` expression; nested quotes can break Oryx argument parsing.
+3. Keep `PORT` set to the app's public port (the provided logs showed `PORT=3001`). Streamlit listens on `$PORT`; FastAPI listens internally on `BACKEND_PORT`, defaulting to `3002`.
+4. Add `AZURE_ENDPOINT`, `AZURE_API_KEY`, and `AZURE_MODEL` as App Service environment variables. Do not commit secrets to GitHub.
+
+The GitHub Actions workflow installs dependencies to validate the code on the runner, but no longer creates and deploys a runner-specific `antenv` virtual environment. Azure's Oryx build should create the runtime environment for App Service.
+
+The current startup script sets `STREAMLIT_API_BASE=http://127.0.0.1:3002` for Streamlit's server-side calls to FastAPI. If you explicitly define `STREAMLIT_API_BASE` in Azure settings, make sure it points to this internal URL.
