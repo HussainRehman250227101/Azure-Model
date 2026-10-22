@@ -6,29 +6,33 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout GitHub Actions
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14' 
+          python-version: "3.14"
 
-      - name: Create antenv and install dependencies
+      # Verify dependencies and syntax on the runner. Do not deploy a venv
+      # created on GitHub's runner; Azure must build its own Linux environment.
+      - name: Install dependencies and validate Python
         run: |
-          python -m venv antenv
-          source antenv/bin/activate
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          python -m compileall -q main.py streamlit_app.py
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'Chat-Bot-Azure'  # ⚠️ Ensure this matches your App Service name
+          app-name: "Chat-Bot-Azure"
           publish-profile: ${{ secrets.CHAT_BOT }}
           package: .
