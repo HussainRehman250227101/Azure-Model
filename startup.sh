@@ -2,7 +2,9 @@
 # Azure App Service startup script for Streamlit UI + FastAPI backend.
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# Oryx can place the built application under APP_PATH rather than wwwroot.
+APP_DIR="${APP_PATH:-$(dirname "$0")}"
+cd "$APP_DIR"
 
 # App Service routes public traffic to the configured PORT. The provided logs
 # show PORT=3001, so Streamlit listens on that port by default.
