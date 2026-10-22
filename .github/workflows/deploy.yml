@@ -36,7 +36,7 @@ jobs:
           python -m compileall -q main.py streamlit_app.py
 
       - name: Build Python app for Azure App Service (Oryx)
-        uses: azure/appservice-build@v2
+        uses: azure/appservice-build@v3
         with:
           platform: python
           platform-version: "3.14"
