@@ -318,7 +318,7 @@ async def generate_image(request: GenerateImageRequest) -> Response:
             width=1024,
             height=1024,
         )
-        if not isinstance(png, (bytes, bytearray)) or not bytes(png).startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        if not isinstance(png, (bytes, bytearray)) or not bytes(png).startswith(b"\x89PNG\r\n\x1a\n"):
             raise ValueError("The SVG renderer did not return valid PNG bytes.")
         png = bytes(png)
     except Exception as exc:
