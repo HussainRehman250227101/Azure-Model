@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Verify dependencies and syntax on the runner. Do not deploy a venv
-      # created on GitHub's runner; Azure must build its own Linux environment.
+      # Validate imports/syntax on the runner. The Oryx action below creates the
+      # deployable Linux build output; do not deploy the runner's virtualenv.
       - name: Install dependencies and validate Python
         run: |
           python -m pip install --upgrade pip
