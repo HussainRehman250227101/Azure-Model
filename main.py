@@ -192,6 +192,22 @@ def sanitize_svg(svg_text: str) -> str:
         raise HTTPException(status_code=502, detail="The model returned malformed SVG markup.")
     if not re.search(r"\bxmlns\s*=", svg[:root_end]):
         svg = svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+
+    # Models occasionally omit root dimensions or the viewBox. Add safe defaults
+    # so SVG renderers have a predictable 1024 × 1024 canvas.
+    root_match = re.search(r"<svg\b[^>]*>", svg)
+    if not root_match:
+        raise HTTPException(status_code=502, detail="The model returned malformed SVG markup.")
+    root_tag = root_match.group(0)
+    required_attributes = (
+        ("width", '"1024"'),
+        ("height", '"1024"'),
+        ("viewBox", '"0 0 1024 1024"'),
+    )
+    for attribute, default_value in required_attributes:
+        if not re.search(rf"\b{attribute}\s*=", root_tag):
+            root_tag = root_tag[:-1] + f" {attribute}={default_value}>"
+    svg = svg[:root_match.start()] + root_tag + svg[root_match.end():]
     return svg
 
 
@@ -286,25 +302,32 @@ async def generate_image(request: GenerateImageRequest) -> Response:
     svg = sanitize_svg(extract_text(data))
 
     try:
-        # Pillow's SVG support depends on optional backends; CairoSVG gives consistent
-        # vector rasterization while preserving the SVG safety checks above.
-        import cairosvg
-        png = cairosvg.svg2png(
-            bytestring=svg.encode("utf-8"),
-            output_width=1024,
-            output_height=1024,
-        )
+        # resvg_py uses a bundled Rust renderer and does not require system Cairo
+        # libraries, which is especially important on Windows.
+        import resvg_py
     except ImportError as exc:
-        logger.error("CairoSVG is not installed")
+        logger.exception("resvg_py is not installed")
         raise HTTPException(
             status_code=500,
-            detail="PNG conversion dependency is missing. Install requirements.txt and restart.",
+            detail="SVG renderer is missing. Run 'pip install -r requirements.txt' and restart the backend.",
         ) from exc
+
+    try:
+        png = resvg_py.svg_to_bytes(
+            svg_string=svg,
+            width=1024,
+            height=1024,
+        )
+        if not isinstance(png, (bytes, bytearray)) or not bytes(png).startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+            raise ValueError("The SVG renderer did not return valid PNG bytes.")
+        png = bytes(png)
     except Exception as exc:
-        logger.exception("SVG-to-PNG conversion failed")
+        logger.exception("SVG-to-PNG rendering failed")
+        # The message is useful when diagnosing malformed model-generated SVG.
+        reason = str(exc).splitlines()[0][:240] or type(exc).__name__
         raise HTTPException(
             status_code=502,
-            detail="Could not convert the generated SVG to PNG. Please try another prompt.",
+            detail=f"SVG-to-PNG rendering failed ({type(exc).__name__}): {reason}",
         ) from exc
 
     return Response(
