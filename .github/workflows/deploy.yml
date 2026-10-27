@@ -34,6 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m compileall -q main.py streamlit_app.py
+          python -m unittest discover -s tests -v
 
       - name: Build Python app for Azure App Service (Oryx)
         uses: azure/appservice-build@v3
