@@ -10,6 +10,7 @@ import io
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -49,6 +50,25 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_CHAT_MESSAGES = 20
 MAX_MESSAGE_CHARS = 12_000
 REQUEST_TIMEOUT_SECONDS = 90.0
+
+SMARTCARTAI_PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "system_prompt.txt"
+
+
+def load_system_prompt() -> str:
+    """Load the version-controlled SmartCartAI instructions from disk."""
+    try:
+        prompt = SMARTCARTAI_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise RuntimeError(
+            f"Unable to load the required SmartCartAI system prompt: {SMARTCARTAI_PROMPT_PATH}"
+        ) from exc
+
+    if not prompt:
+        raise RuntimeError(f"The SmartCartAI system prompt is empty: {SMARTCARTAI_PROMPT_PATH}")
+    return prompt
+
+
+SMARTCARTAI_SYSTEM_PROMPT = load_system_prompt()
 
 
 class ChatMessage(BaseModel):
@@ -241,7 +261,7 @@ async def chat(request: ChatRequest) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="Please provide a message.")
 
     data = await call_azure(
-        [{"role": "system", "content": "You are a helpful AI assistant."}, *history]
+        [{"role": "system", "content": SMARTCARTAI_SYSTEM_PROMPT}, *history]
     )
     reply = extract_text(data)
     if not reply:
