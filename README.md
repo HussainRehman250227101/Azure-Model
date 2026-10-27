@@ -13,7 +13,7 @@ The API key stays on the server. Do not put Azure credentials in frontend code o
 
 ## SmartCartAI prompt engineering
 
-Chat requests use the version-controlled system prompt at `prompts/system_prompt.txt`. The FastAPI backend loads it from a path relative to `main.py` and sends it as the system message for each `POST /api/chat` call. Edit this file to revise SmartCartAI's identity, shopping scope, response style, and handling of off-topic requests. Restart the backend after changing the prompt locally.
+Chat requests use the version-controlled e-commerce system prompt at `prompts/system_prompt.txt`. The FastAPI backend loads it from a path relative to `main.py` and sends it as the system message for each `POST /api/chat` call. The prompt defines SmartCartAI's identity and boundaries for product discovery, product comparisons, prices and offers, cart and checkout guidance, order support, shipping, returns, and refunds. It also prevents unsupported claims about live catalog data or completed transactions. Edit this file to revise the e-commerce domain rules and customer-support behavior. Restart the backend after changing the prompt locally.
 
 This change is implemented in the repository; it does not require editing Azure AI Foundry's model playground. A prompt guides model behavior but cannot guarantee perfect compliance, so evaluate both relevant shopping requests and off-topic/adversarial inputs against the actual Azure deployment.
 

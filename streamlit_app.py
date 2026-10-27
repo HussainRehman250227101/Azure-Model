@@ -42,8 +42,8 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
-      <h1>🛒 SmartCartAI Shopping Assistant</h1>
-      <p>Discover products, compare specifications, and make informed shopping decisions. Visual tools are available below.</p>
+      <h1>🛒 SmartCartAI E-commerce Assistant</h1>
+      <p>Product discovery, cart and checkout guidance, order support, shipping, returns, and refunds.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -101,7 +101,7 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = [
         {
             "role": "assistant",
-            "content": "Hello! I'm SmartCartAI, your shopping assistant. Ask me about products, specifications, budgets, and comparisons.",
+            "content": "Hello! I'm SmartCartAI, your e-commerce assistant. I can help with product discovery, product comparisons, cart and checkout questions, orders, shipping, and returns.",
         }
     ]
 
@@ -118,7 +118,7 @@ with chat_tab:
             st.session_state.chat_messages = [
                 {
                     "role": "assistant",
-                    "content": "New conversation started. I'm SmartCartAI, ready to help with product discovery and comparisons.",
+                    "content": "New conversation started. I'm SmartCartAI, ready to help with products, checkout, orders, shipping, and returns.",
                 }
             ]
             st.rerun()
@@ -127,7 +127,7 @@ with chat_tab:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    prompt = st.chat_input("Message your AI assistant...")
+    prompt = st.chat_input("Ask about products, checkout, orders, shipping, or returns...")
     if prompt:
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         # Keep the sent history within the same bounds as the backend.

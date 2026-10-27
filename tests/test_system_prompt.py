@@ -18,10 +18,14 @@ class SmartCartAIPromptTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(prompt.strip())
         self.assertIn("SmartCartAI", prompt)
-        self.assertIn("OUT-OF-SCOPE REQUESTS", prompt)
+        self.assertIn("OUT-OF-DOMAIN REQUESTS", prompt)
         self.assertIn("current date", prompt)
         self.assertIn("current time", prompt)
         self.assertIn("Never invent product names", prompt)
+        self.assertIn("CATALOG AND PRODUCT DISCOVERY", prompt)
+        self.assertIn("CART AND CHECKOUT", prompt)
+        self.assertIn("ORDERS, SHIPPING, RETURNS, AND REFUNDS", prompt)
+        self.assertIn("Never request a customer's password", prompt)
 
     async def test_chat_sends_system_prompt_before_conversation_history(self) -> None:
         with patch("main.call_azure", new_callable=AsyncMock) as mock_call:
