@@ -12,7 +12,7 @@ import httpx
 import streamlit as st
 
 st.set_page_config(
-    page_title="Azure AI Generative Studio",
+    page_title="SmartCartAI",
     page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -42,8 +42,8 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
-      <h1>✨ Azure AI Generative Studio</h1>
-      <p>Chat with your model, describe images, and create downloadable vector-style PNG artwork.</p>
+      <h1>🛒 SmartCartAI Shopping Assistant</h1>
+      <p>Discover products, compare specifications, and make informed shopping decisions. Visual tools are available below.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -101,7 +101,7 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = [
         {
             "role": "assistant",
-            "content": "Hello! I'm your Azure AI assistant. Ask me a question or try one of the studio tools.",
+            "content": "Hello! I'm SmartCartAI, your shopping assistant. Ask me about products, specifications, budgets, and comparisons.",
         }
     ]
 
@@ -112,13 +112,13 @@ chat_tab, analyze_tab, generate_tab = st.tabs(
 with chat_tab:
     header_col, clear_col = st.columns([5, 1])
     with header_col:
-        st.subheader("Chat with Azure AI")
+        st.subheader("Chat with SmartCartAI")
     with clear_col:
         if st.button("New chat", use_container_width=True):
             st.session_state.chat_messages = [
                 {
                     "role": "assistant",
-                    "content": "New conversation started. What would you like to explore?",
+                    "content": "New conversation started. I'm SmartCartAI, ready to help with product discovery and comparisons.",
                 }
             ]
             st.rerun()
