@@ -11,6 +11,20 @@ Python/FastAPI implementation of the backend in [Azure-Models](https://github.co
 
 The API key stays on the server. Do not put Azure credentials in frontend code or commit your `.env` file.
 
+## SmartCartAI prompt engineering
+
+Chat requests use the version-controlled system prompt at `prompts/system_prompt.txt`. The FastAPI backend loads it from a path relative to `main.py` and sends it as the system message for each `POST /api/chat` call. Edit this file to revise SmartCartAI's identity, shopping scope, response style, and handling of off-topic requests. Restart the backend after changing the prompt locally.
+
+This change is implemented in the repository; it does not require editing Azure AI Foundry's model playground. A prompt guides model behavior but cannot guarantee perfect compliance, so evaluate both relevant shopping requests and off-topic/adversarial inputs against the actual Azure deployment.
+
+Run the offline regression tests from the repository root:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+These tests verify prompt loading, system-message integration, and rejection of user-supplied `system` roles in conversation history. They do not call Azure or incur model usage.
+
 ## Requirements
 
 - Python 3.10 or newer
