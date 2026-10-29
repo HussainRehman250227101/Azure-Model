@@ -2,6 +2,7 @@
 from __future__ import annotations
 import base64, hashlib, io, json, logging, os, re, shutil
 from pathlib import Path
+from functools import lru_cache
 from typing import Any
 from uuid import uuid4
 import httpx
@@ -199,6 +200,26 @@ def _rebuild_index() -> int:
     return len(chunks)
 
 
+@lru_cache(maxsize=2)
+def _load_bm25_retriever(index_mtime_ns: int):
+    """Cache the LangChain BM25 retriever until a new chunk index is written."""
+    from langchain_community.retrievers import BM25Retriever
+    from langchain_core.documents import Document
+
+    chunks_path = DATA_DIR / "chunks.json"
+    serialized = json.loads(chunks_path.read_text(encoding="utf-8"))
+    if not isinstance(serialized, list) or not serialized:
+        return None
+    documents = [
+        Document(page_content=item["page_content"], metadata=item.get("metadata") or {})
+        for item in serialized
+        if isinstance(item, dict) and isinstance(item.get("page_content"), str) and item["page_content"].strip()
+    ]
+    if not documents:
+        return None
+    return BM25Retriever.from_documents(documents, k=min(RAG_TOP_K, len(documents)))
+
+
 def retrieve_rag_context(query: str) -> str:
     """Retrieve related PDF chunks with LangChain BM25; no embedding model/API required."""
     if not _rag_enabled():
@@ -207,20 +228,9 @@ def retrieve_rag_context(query: str) -> str:
     if not chunks_path.is_file():
         return ""
     try:
-        from langchain_community.retrievers import BM25Retriever
-        from langchain_core.documents import Document
-
-        serialized = json.loads(chunks_path.read_text(encoding="utf-8"))
-        if not isinstance(serialized, list) or not serialized:
+        retriever = _load_bm25_retriever(chunks_path.stat().st_mtime_ns)
+        if retriever is None:
             return ""
-        documents = [
-            Document(page_content=item["page_content"], metadata=item.get("metadata") or {})
-            for item in serialized
-            if isinstance(item, dict) and isinstance(item.get("page_content"), str) and item["page_content"].strip()
-        ]
-        if not documents:
-            return ""
-        retriever = BM25Retriever.from_documents(documents, k=min(RAG_TOP_K, len(documents)))
         relevant_docs = retriever.invoke(query[:MAX_MESSAGE_CHARS])
         parts = []
         for doc in relevant_docs:
