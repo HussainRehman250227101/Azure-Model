@@ -113,82 +113,126 @@ def sanitize_svg(text: str) -> str:
     return svg[:match.start()] + root + svg[match.end():]
 
 def _rag_enabled() -> bool:
-    return os.getenv("RAG_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
+    return os.getenv("RAG_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-def _embedding_model():
-    from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
-    endpoint, key, deployment = (os.getenv("AZURE_ENDPOINT") or "").strip().rstrip("/"), (os.getenv("AZURE_API_KEY") or "").strip(), (os.getenv("AZURE_EMBEDDING_MODEL") or "").strip()
-    if not endpoint or not key or not deployment: raise RuntimeError("Set AZURE_ENDPOINT, AZURE_API_KEY and AZURE_EMBEDDING_MODEL for PDF RAG.")
-    if "/api/projects/" in endpoint or endpoint.endswith("/openai/v1") or endpoint.endswith("/openai/v1/responses"):
-        base = endpoint.removesuffix("/responses")
-        if base.endswith("/openai/v1"): return OpenAIEmbeddings(model=deployment, api_key=key, base_url=base)
-        return OpenAIEmbeddings(model=deployment, api_key=key, base_url=base + "/openai/v1")
-    return AzureOpenAIEmbeddings(azure_endpoint=endpoint, api_key=key, azure_deployment=deployment, api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"))
 
 def _index_exists() -> bool:
-    return (INDEX_DIR/"index.faiss").is_file() and (INDEX_DIR/"index.pkl").is_file()
-def _load_vector_store():
-    if not _index_exists(): return None
-    from langchain_community.vectorstores import FAISS
-    return FAISS.load_local(str(INDEX_DIR), _embedding_model(), allow_dangerous_deserialization=True)
+    """A text-chunk file is the LangChain BM25 index source; no embeddings are needed."""
+    return (DATA_DIR / "chunks.json").is_file()
+
+
 def _manifest() -> dict[str, Any]:
-    if not RAG_MANIFEST.is_file(): return {'documents':[]}
+    if not RAG_MANIFEST.is_file():
+        return {"documents": []}
     try:
         data = json.loads(RAG_MANIFEST.read_text(encoding="utf-8"))
-        return data if isinstance(data,dict) else {'documents':[]}
-    except (OSError,ValueError): return {'documents':[]}
+        return data if isinstance(data, dict) else {"documents": []}
+    except (OSError, ValueError):
+        return {"documents": []}
+
+
 def _save_manifest(data: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True,exist_ok=True)
-    tmp = RAG_MANIFEST.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data,indent=2),encoding="utf-8")
-    tmp.replace(RAG_MANIFEST)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temp = RAG_MANIFEST.with_suffix(".tmp")
+    temp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    temp.replace(RAG_MANIFEST)
+
+
 async def _read_upload_limited(upload: UploadFile, maximum: int) -> bytes:
-    data=bytearray()
+    data = bytearray()
     while True:
-        part=await upload.read(1024*1024)
-        if not part: break
+        part = await upload.read(1024 * 1024)
+        if not part:
+            break
         data.extend(part)
-        if len(data)>maximum: raise HTTPException(status_code=413,detail=f"PDF must be {maximum//(1024*1024)} MiB or smaller.")
-    if not data: raise HTTPException(status_code=400,detail="Uploaded PDF is empty.")
+        if len(data) > maximum:
+            raise HTTPException(status_code=413, detail=f"PDF must be {maximum // (1024 * 1024)} MiB or smaller.")
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded PDF is empty.")
     return bytes(data)
 
+
 def _rebuild_index() -> int:
+    """Extract and chunk every uploaded PDF, persisting text for BM25 retrieval."""
     from langchain_community.document_loaders import PyPDFLoader
-    from langchain_community.vectorstores import FAISS
+    from langchain_core.documents import Document
     from langchain_text_splitters import RecursiveCharacterTextSplitter
-    pdfs=sorted(UPLOAD_DIR.glob("*.pdf"))
-    if not pdfs:
-        if INDEX_DIR.exists(): shutil.rmtree(INDEX_DIR)
-        return 0
-    splitter=RecursiveCharacterTextSplitter(chunk_size=900,chunk_overlap=150,separators=["\n\n","\n",". "," ",""])
-    chunks=[]
-    for path in pdfs:
-        docs=[d for d in PyPDFLoader(str(path)).load() if d.page_content.strip()]
-        if not docs: raise HTTPException(status_code=400,detail=f"No extractable text found in {path.name}. Scanned PDFs need OCR first.")
-        for doc in docs: doc.metadata.update({"source":path.name,"file_name":path.name})
-        chunks.extend(splitter.split_documents(docs))
-    if not chunks: raise HTTPException(status_code=400,detail="No readable text found in uploaded PDFs.")
-    store=FAISS.from_documents(chunks,_embedding_model())
-    INDEX_DIR.mkdir(parents=True,exist_ok=True)
-    store.save_local(str(INDEX_DIR))
+
+    pdf_files = sorted(UPLOAD_DIR.glob("*.pdf"))
+    chunks = []
+    if pdf_files:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=900,
+            chunk_overlap=150,
+            separators=["\n\n", "\n", ". ", " ", ""],
+        )
+        for path in pdf_files:
+            pages = [doc for doc in PyPDFLoader(str(path)).load() if doc.page_content.strip()]
+            if not pages:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No extractable text found in {path.name}. Scanned PDFs need OCR first.",
+                )
+            for page in pages:
+                page.metadata.update({"source": path.name, "file_name": path.name})
+            chunks.extend(splitter.split_documents(pages))
+        if not chunks:
+            raise HTTPException(status_code=400, detail="No readable text found in uploaded PDFs.")
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    chunks_path = DATA_DIR / "chunks.json"
+    if chunks:
+        serialized = [
+            {"page_content": doc.page_content, "metadata": doc.metadata}
+            for doc in chunks
+        ]
+        temp = chunks_path.with_suffix(".tmp")
+        temp.write_text(json.dumps(serialized, ensure_ascii=False), encoding="utf-8")
+        temp.replace(chunks_path)
+    else:
+        chunks_path.unlink(missing_ok=True)
+
+    # Remove a prior FAISS index from an older version if it exists. This code
+    # path now uses keyword retrieval and never loads or deserializes FAISS files.
+    if INDEX_DIR.exists():
+        shutil.rmtree(INDEX_DIR)
     return len(chunks)
 
+
 def retrieve_rag_context(query: str) -> str:
-    if not _rag_enabled(): return ""
+    """Retrieve related PDF chunks with LangChain BM25; no embedding model/API required."""
+    if not _rag_enabled():
+        return ""
+    chunks_path = DATA_DIR / "chunks.json"
+    if not chunks_path.is_file():
+        return ""
     try:
-        store=_load_vector_store()
-        if store is None: return ""
-        docs=store.similarity_search(query[:MAX_MESSAGE_CHARS],k=RAG_TOP_K)
-        parts=[]
-        for doc in docs:
-            source=Path(str(doc.metadata.get("source","uploaded PDF"))).name
-            page=doc.metadata.get("page")
-            label=f", page {int(page)+1}" if isinstance(page,int) else ""
-            content=" ".join(doc.page_content.split())
-            if content: parts.append(f"[Source: {source}{label}] {content[:1300]}")
+        from langchain_community.retrievers import BM25Retriever
+        from langchain_core.documents import Document
+
+        serialized = json.loads(chunks_path.read_text(encoding="utf-8"))
+        if not isinstance(serialized, list) or not serialized:
+            return ""
+        documents = [
+            Document(page_content=item["page_content"], metadata=item.get("metadata") or {})
+            for item in serialized
+            if isinstance(item, dict) and isinstance(item.get("page_content"), str) and item["page_content"].strip()
+        ]
+        if not documents:
+            return ""
+        retriever = BM25Retriever.from_documents(documents, k=min(RAG_TOP_K, len(documents)))
+        relevant_docs = retriever.invoke(query[:MAX_MESSAGE_CHARS])
+        parts = []
+        for doc in relevant_docs:
+            source = Path(str(doc.metadata.get("source", "uploaded PDF"))).name
+            page = doc.metadata.get("page")
+            page_label = f", page {int(page) + 1}" if isinstance(page, int) else ""
+            content = " ".join(doc.page_content.split())
+            if content:
+                parts.append(f"[Source: {source}{page_label}] {content[:1300]}")
         return "\n\n".join(parts)[:6000]
     except Exception as exc:
-        logger.warning("PDF retrieval failed (%s); proceeding without context.",type(exc).__name__)
+        logger.warning("PDF BM25 retrieval failed (%s); proceeding without context.", type(exc).__name__)
         return ""
 
 @app.get("/")
