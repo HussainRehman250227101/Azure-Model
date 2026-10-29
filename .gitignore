@@ -13,13 +13,13 @@ env/
 .ruff_cache/
 .coverage
 htmlcov/
-
 # Editors and OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
 # Generated files
 *.png
 *.log
+# Uploaded PDFs and indexes are runtime data
+rag_data/

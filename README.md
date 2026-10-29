@@ -1,122 +1,44 @@
 # Azure AI Generative Studio — Python API
 
-Python/FastAPI implementation of the backend in [Azure-Models](https://github.com/HussainRehman250227101/Azure-Models).
+FastAPI + Streamlit app using Azure OpenAI Responses API and the SmartCartAI e-commerce prompt.
 
 ## Features
-
-- Chat completions using conversation history (`POST /api/chat`)
-- Image analysis for PNG, JPG/JPEG, and WebP (`POST /api/vision`)
+- Chat completions (`POST /api/chat`)
+- Uploadable PDF knowledge base with indexing, listing and deletion (`/api/rag/*`)
+- Image analysis (`POST /api/vision`)
 - Prompt-to-SVG illustration generation with PNG output (`POST /api/generate-image`)
 - Health check (`GET /api/health`)
 
-The API key stays on the server. Do not put Azure credentials in frontend code or commit your `.env` file.
+## PDF RAG configuration
+Keep your existing `AZURE_ENDPOINT`, `AZURE_API_KEY`, and `AZURE_MODEL` values.
 
-## SmartCartAI prompt engineering
+Add application settings:
+- `RAG_ENABLED=true`
+- `AZURE_EMBEDDING_MODEL=your-embedding-deployment-name` (a separate embedding deployment, e.g. `text-embedding-3-small`)
+- `RAG_DATA_DIR=/home/data/smartcart-rag` (use a persistent writable directory/volume)
+- Optional `RAG_MAX_PDF_BYTES=26214400` (25 MiB)
+- Optional `RAG_TOP_K=4`
+- Optional `AZURE_OPENAI_API_VERSION=2024-10-21` for standard Azure OpenAI embedding endpoints
 
-Chat requests use the version-controlled e-commerce system prompt at `prompts/system_prompt.txt`. The FastAPI backend loads it from a path relative to `main.py` and sends it as the system message for each `POST /api/chat` call. The prompt defines SmartCartAI's identity and boundaries for product discovery, product comparisons, prices and offers, cart and checkout guidance, order support, shipping, returns, and refunds. It also prevents unsupported claims about live catalog data or completed transactions. Edit this file to revise the e-commerce domain rules and customer-support behavior. Restart the backend after changing the prompt locally.
+The configured Foundry `/openai/v1/responses` URL is detected and LangChain's OpenAI-compatible embeddings client uses the `/openai/v1` base. Ensure the embedding deployment exists; GPT-4.1-mini is the chat model, not an embedding model.
 
-This change is implemented in the repository; it does not require editing Azure AI Foundry's model playground. A prompt guides model behavior but cannot guarantee perfect compliance, so evaluate both relevant shopping requests and off-topic/adversarial inputs against the actual Azure deployment.
+## Upload workflow
+1. Deploy the code and install `requirements.txt`.
+2. Set `RAG_ENABLED`, `AZURE_EMBEDDING_MODEL`, and durable `RAG_DATA_DIR`.
+3. Open Streamlit and select **Knowledge Base**.
+4. Upload a PDF and click **Upload and index PDF**.
+5. Ask a question in Chat; relevant chunks become reference context.
+6. List or remove PDFs in the Knowledge Base tab; removal rebuilds the index.
 
-Run the offline regression tests from the repository root:
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-These tests verify prompt loading, system-message integration, and rejection of user-supplied `system` roles in conversation history. They do not call Azure or incur model usage.
-
-## Requirements
-
-- Python 3.10 or newer
-- An Azure OpenAI resource and a deployment that supports the Responses API and image input
+Text-based PDFs are supported directly. Scanned/image-only PDFs need OCR. The upload/delete API is not authenticated in this initial version, so keep the application private or add authentication before public production use. Store data under persistent `RAG_DATA_DIR`; multiple replicas should use shared storage or a managed vector database.
 
 ## Local setup (Windows PowerShell)
-
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-```
-
-Edit `.env` and set:
-
-- `AZURE_ENDPOINT`: your Azure OpenAI resource endpoint. The code accepts a base endpoint, an endpoint ending in `/openai/v1`, or the full `/openai/v1/responses` URL.
-- `AZURE_API_KEY`: key from your Azure resource.
-- `AZURE_MODEL`: the **deployment name** to use for the Responses API.
-- `PORT` (optional; defaults to `3001`).
-- `CORS_ORIGINS` (optional; comma-separated browser origins, defaults to Vite localhost origins).
-
-Run the backend:
-
-```powershell
 uvicorn main:app --reload --host 127.0.0.1 --port 3001
 ```
-
-API docs are available at `http://127.0.0.1:3001/docs`.
-
-## Fixing SVG-to-PNG conversion errors
-
-If you pulled an older version of this project and see `Could not convert the generated SVG to PNG`, stop the backend and update the dependencies/code:
-
-```powershell
-python -m pip install --upgrade -r requirements.txt
-uvicorn main:app --reload --host 127.0.0.1 --port 3001
-```
-
-The current backend uses `resvg-py` instead of CairoSVG to avoid missing Cairo native libraries, and logs renderer details to the backend terminal if the model returns invalid SVG.
-
-## API examples
-
-### Health
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:3001/api/health
-```
-
-### Chat
-
-```powershell
-$body = @{ messages = @(@{ role = 'user'; content = 'Explain machine learning simply.' }) } | ConvertTo-Json -Depth 8
-Invoke-RestMethod http://127.0.0.1:3001/api/chat -Method Post -ContentType 'application/json' -Body $body
-```
-
-### Generate an image
-
-```powershell
-$body = @{ prompt = 'A blue sports car in a clean vector illustration style' } | ConvertTo-Json
-Invoke-WebRequest http://127.0.0.1:3001/api/generate-image -Method Post -ContentType 'application/json' -Body $body -OutFile generated.png
-```
-
-### Analyze an image
-
-```powershell
-curl.exe -X POST http://127.0.0.1:3001/api/vision -F "image=@C:\path\to\image.png"
-```
-
-## Frontend integration
-
-The original frontend defaults to `http://localhost:3001`, which matches this backend. Start it with the existing React/Vite app, then run this API separately. If your frontend uses another port, add that exact origin to `CORS_ORIGINS`.
-
-If your local frontend is still part of the `Azure-Models` repository, keep the React/Vite project there and run this Python API from the `Azure` folder. The API contract is kept compatible with the frontend (`reply` JSON values, `{error: ...}` failures, and binary PNG output).
-
-## Notes
-
-- Image upload limit is 10 MiB; accepted formats are PNG, JPEG, and WebP.
-- Generated art is SVG authored by the text model and rasterized to PNG using `resvg-py`, which includes a prebuilt renderer and does not require native Cairo/GTK libraries on Windows. It is vector-style illustration, not native photorealistic image generation.
-- Azure deployment/API support varies by resource and model. If a request fails, the API returns Azure's error message when available.
-
-
-## Deploy Streamlit and FastAPI together to Azure App Service
-
-This repo includes `startup.sh` to launch FastAPI on the loopback interface and Streamlit as the public web app. In Azure App Service (Linux, Python):
-
-1. The GitHub Actions workflow runs an Oryx build (`azure/appservice-build`) and deploys its output directory, which includes the Python runtime dependencies. Keep `requirements.txt` in the repository root. If you instead deploy the raw source folder without the Oryx build step, enable `SCM_DO_BUILD_DURING_DEPLOYMENT=true` in App Service settings.
-2. Set the **Startup Command** to the plain text `bash startup.sh`. Do not paste the multi-command `bash -c '...'` expression; nested quotes can break Oryx argument parsing.
-3. Keep `PORT` set to the app's public port (the provided logs showed `PORT=3001`). Streamlit listens on `$PORT`; FastAPI listens internally on `BACKEND_PORT`, defaulting to `3002`.
-4. Add `AZURE_ENDPOINT`, `AZURE_API_KEY`, and `AZURE_MODEL` as App Service environment variables. Do not commit secrets to GitHub.
-
-The GitHub Actions workflow first validates imports and syntax on the runner, then builds the app with Oryx into `build_output` and deploys that output. This avoids depending on the runner's local virtual environment being available in Azure.
-
-The current startup script sets `STREAMLIT_API_BASE=http://127.0.0.1:3002` for Streamlit's server-side calls to FastAPI. If you explicitly define `STREAMLIT_API_BASE` in Azure settings, make sure it points to this internal URL.
+Run existing regression tests with `python -m unittest discover -s tests -v`.
