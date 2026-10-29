@@ -213,13 +213,21 @@ async def upload_rag_pdf(file: UploadFile = File(...)) -> dict[str,Any]:
     target=UPLOAD_DIR/name
     if target.exists(): target=UPLOAD_DIR/(Path(name).stem+"-"+digest[:8]+".pdf")
     temp=target.with_suffix("."+uuid4().hex+".tmp"); temp.write_bytes(raw); temp.replace(target)
-    try: count=_rebuild_index()
+    manifest_before=_manifest()
+    try:
+        count=_rebuild_index()
+        docs=[d for d in manifest_before.get("documents",[]) if d.get("file_name")!=target.name]
+        docs.append({"file_name":target.name,"sha256":digest,"size_bytes":len(raw)})
+        _save_manifest({"documents":docs})
     except Exception:
         target.unlink(missing_ok=True)
+        # Restore both the manifest and the previous index, if possible.
+        try:
+            _save_manifest(manifest_before)
+            _rebuild_index()
+        except Exception:
+            logger.exception("Could not restore the previous PDF index after upload failure")
         raise
-    manifest=_manifest(); docs=[d for d in manifest.get('documents',[]) if d.get('file_name')!=target.name]
-    docs.append({"file_name":target.name,"sha256":digest,"size_bytes":len(raw)})
-    _save_manifest({'documents':docs})
     return {"message":"PDF uploaded and indexed successfully.","document":docs[-1],"chunk_count":count}
 @app.delete("/api/rag/documents/{file_name}")
 async def delete_rag_pdf(file_name: str) -> dict[str,str]:
