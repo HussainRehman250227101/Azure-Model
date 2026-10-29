@@ -57,18 +57,18 @@ with chat_tab:
         st.rerun()
 with knowledge_tab:
     st.subheader("Upload PDF knowledge")
-    st.write("PDFs are extracted, split into overlapping chunks, embedded, and stored in a searchable vector index.")
-    pdf=st.file_uploader("Choose a PDF document",type=["pdf"],key="rag_pdf_upload",help="Max 25 MiB. Scanned/image-only PDFs need OCR first.")
+    st.write("Upload your one product PDF below. The app automatically extracts its text and prepares a searchable index; you do not need a second PDF or index file.")
+    pdf=st.file_uploader("Select your product PDF",type=["pdf"],key="rag_pdf_upload",help="Upload the original PDF once. Max 25 MiB. Scanned/image-only PDFs need OCR first.")
     if pdf is not None:
         data=pdf.getvalue()
         st.caption(f"{pdf.name} · {len(data):,} bytes")
         if len(data)>MAX_PDF_BYTES: st.error("The PDF exceeds the 25 MiB limit.")
         elif not data.startswith(b"%PDF-"): st.error("The uploaded file is not a valid PDF.")
-        elif st.button("Upload and index PDF",type="primary",key="rag_upload_button"):
+        elif st.button("Upload PDF and prepare for search",type="primary",key="rag_upload_button"):
             try:
-                with st.spinner("Uploading, extracting text, and creating embeddings..."): r=httpx.post(api_url(api_base,"/api/rag/upload"),files={"file":(pdf.name,data,"application/pdf")},timeout=REQUEST_TIMEOUT)
+                with st.spinner("Uploading PDF and preparing searchable text..."): r=httpx.post(api_url(api_base,"/api/rag/upload"),files={"file":(pdf.name,data,"application/pdf")},timeout=REQUEST_TIMEOUT)
                 if not r.is_success: raise RuntimeError(error_message(r))
-                out=r.json(); st.success(out.get("message","PDF indexed.")); st.caption(f"Text chunks indexed: {out.get('chunk_count',0)}"); st.rerun()
+                out=r.json(); st.success(out.get("message","PDF uploaded and prepared for search.")); st.caption(f"Text chunks indexed: {out.get('chunk_count',0)}"); st.rerun()
             except (httpx.HTTPError,RuntimeError,ValueError) as e: st.error(f"PDF upload failed: {e}")
     st.markdown("#### Indexed documents")
     try:
